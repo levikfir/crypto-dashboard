@@ -1,0 +1,69 @@
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+from plyer import notification
+import time
+from twilio.rest import Client
+
+# טוען את הנתונים
+file_path = "/mnt/data/INVEST GPT 2.xlsx"
+sheet_name = "חישובים"
+df = pd.read_excel(file_path, sheet_name=sheet_name)
+
+# הגדרת מבנה הדאשבורד
+st.set_page_config(page_title="Crypto Dashboard", layout="wide")
+st.title("📊 Crypto Investment Dashboard")
+
+# בחירת מטבע לתצוגה
+coin_options = df.iloc[1:, 0].dropna().unique()
+selected_coin = st.selectbox("בחר מטבע:", coin_options)
+
+# סינון הנתונים לפי המטבע הנבחר
+coin_data = df[df.iloc[:, 0] == selected_coin]
+
+# הצגת נתונים מרכזיים
+st.metric(label="💰 סך ההשקעה (USD)", value=f"${coin_data.iloc[0, 1]:,.2f}")
+st.metric(label="📈 אחוז מסך ההשקעה", value=f"{coin_data.iloc[0, 2] * 100:.2f}%")
+st.metric(label="🔢 ממוצע מחיר קנייה", value=f"${coin_data.iloc[0, 4]:,.4f}")
+
+# גרף התפלגות השקעות
+fig = px.pie(df.iloc[1:], names=df.columns[0], values=df.iloc[:, 1], title="התפלגות השקעות")
+st.plotly_chart(fig, use_container_width=True)
+
+# הצגת טבלת נתונים
+st.dataframe(df.iloc[1:], use_container_width=True)
+
+# פונקציה לשליחת התראות
+def send_notification(title, message):
+    notification.notify(
+        title=title,
+        message=message,
+        app_name="Crypto Dashboard",
+        timeout=5
+    )
+
+# פונקציה לשליחת הודעה ב-WhatsApp
+def send_whatsapp_message(message):
+    account_sid = "your_twilio_account_sid"
+    auth_token = "your_twilio_auth_token"
+    client = Client(account_sid, auth_token)
+    
+    client.messages.create(
+        body=message,
+        from_="whatsapp:+14155238886",  # מספר ה-WhatsApp של Twilio
+        to="whatsapp:+YourPhoneNumber"  # מספר ה-WhatsApp שלך
+    )
+
+# מחיר יעד למטבע (מתוך הגיליון, אם קיים)
+if "Target Price" in df.columns:
+    target_price = coin_data.iloc[0, df.columns.get_loc("Target Price")]
+else:
+    target_price = None
+
+# מעקב אחר הגעה ליעד
+if target_price and current_value >= target_price * 0.9 and current_value < target_price:
+    alert_message = f"📢 קרוב למחיר היעד! ההשקעה ב-{selected_coin} במרחק 10% ממחיר היעד!"
+    send_notification("📢 קרוב ליעד!", alert_message)
+    send_whatsapp_message(alert_message)
+
+st.session_state.previous_value = current_value
